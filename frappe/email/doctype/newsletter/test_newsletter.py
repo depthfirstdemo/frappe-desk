@@ -2,7 +2,12 @@
 # MIT License. See LICENSE
 
 from random import choice
+from types import SimpleNamespace
+from unittest import TestCase
 from unittest.mock import MagicMock, PropertyMock, patch
+
+from jinja2 import UndefinedError
+from jinja2.sandbox import SecurityError
 
 import frappe
 from frappe.email.doctype.newsletter.exceptions import (
@@ -250,3 +255,63 @@ class TestNewsletter(TestNewsletterMixin, FrappeTestCase):
 		newsletter.send_emails()
 		self.assertEqual(frappe.db.count("Email Queue"), 4)
 		self.assertTrue(newsletter.email_sent)
+
+
+class TestNewsletterRendering(TestCase):
+	def render_message(self, content_type, message, medium=None):
+		# Exercise rendering without a database, email queue, or saved document.
+		data = {"subject": "Newsletter subject", "email_group": [{"email_group": "Subscribers"}]}
+		newsletter = SimpleNamespace(
+			content_type=content_type,
+			message=message,
+			message_html=message,
+			message_md=message,
+			campaign=None,
+			as_dict=lambda: data,
+		)
+		newsletter.add_source = lambda html, medium=None: Newsletter.add_source(newsletter, html, medium)
+		return Newsletter.get_message(newsletter, medium=medium)
+
+	def test_document_templates(self):
+		for content_type in ("Rich Text", "HTML", "Markdown"):
+			with self.subTest(content_type=content_type):
+				html = self.render_message(
+					content_type,
+					"<div>\n<p>{{ doc.subject }}</p>"
+					"{% for group in doc.email_group %}<p>{{ group.email_group }}</p>{% endfor %}\n</div>",
+				)
+				self.assertIn("<p>Newsletter subject</p>", html)
+				self.assertIn("<p>Subscribers</p>", html)
+
+	def test_privileged_calls_are_unavailable(self):
+		payloads = (
+			'{{ frappe.db.get_value("User", "Administrator", "email") }}',
+			'{{ frappe.db.set_value("User", "Administrator", "last_name", "changed") }}',
+			'{{ frappe.db.get_all("User") }}',
+			'{{ frappe.get_all("User") }}',
+			'{{ run_script("test_script") }}',
+		)
+		for content_type in ("Rich Text", "HTML", "Markdown"):
+			for payload in payloads:
+				with self.subTest(content_type=content_type, payload=payload):
+					with self.assertRaises(UndefinedError):
+						self.render_message(content_type, "<div>\n" + payload + "\n</div>")
+
+	def test_application_globals_are_undefined(self):
+		self.assertEqual(
+			self.render_message("HTML", "{{ frappe is undefined }} {{ run_script is undefined }}"),
+			"True True",
+		)
+
+	def test_document_python_attributes_are_blocked(self):
+		with self.assertRaises(SecurityError):
+			self.render_message("HTML", "{{ doc['__class__']['__mro__'] }}")
+
+	def test_markdown_conversion(self):
+		self.assertIn("<h1>Newsletter subject</h1>", self.render_message("Markdown", "# {{ doc.subject }}"))
+
+	def test_empty_content(self):
+		for content_type in ("Rich Text", "HTML"):
+			for message in (None, ""):
+				with self.subTest(content_type=content_type, message=message):
+					self.assertEqual(self.render_message(content_type, message), "")

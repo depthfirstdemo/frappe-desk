@@ -2,6 +2,8 @@
 # MIT License. See LICENSE
 
 
+from jinja2.sandbox import SandboxedEnvironment
+
 import frappe
 import frappe.utils
 from frappe import _
@@ -242,7 +244,9 @@ class Newsletter(WebsiteGenerator):
 		if self.content_type == "HTML":
 			message = self.message_html
 
-		html = frappe.render_template(message, {"doc": self.as_dict()})
+		# Newsletter authors may template document data, but must not access Frappe APIs.
+		env = SandboxedEnvironment()
+		html = env.from_string(message or "").render({"doc": self.as_dict()})
 
 		return self.add_source(html, medium=medium)
 
