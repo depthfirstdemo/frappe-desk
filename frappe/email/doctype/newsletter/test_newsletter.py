@@ -5,6 +5,7 @@ from random import choice
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import frappe
+from jinja2.exceptions import UndefinedError
 from frappe.email.doctype.newsletter.exceptions import (
 	NewsletterAlreadySentError,
 	NoRecipientFoundError,
@@ -191,6 +192,20 @@ class TestNewsletter(TestNewsletterMixin, FrappeTestCase):
 			],
 		)
 		self.assertTrue(email_queue)
+
+	def test_newsletter_message_template_only_exposes_doc(self):
+		newsletter = self.get_newsletter(content_type="HTML", message_html="<p>{{ doc.subject }}</p>")
+		self.assertEqual(newsletter.get_message(), "<p>_Test Newsletter</p>")
+
+		for expression in (
+			'{{ frappe.db.get_value("User", "Administrator", "email") }}',
+			'{{ frappe.db.set_value("User", "Administrator", "last_name", "changed") }}',
+			"{{ run_script('frappe.db.get_value(...)') }}",
+		):
+			with self.subTest(expression=expression):
+				newsletter.message_html = expression
+				with self.assertRaises(UndefinedError):
+					newsletter.get_message()
 
 	def test_newsletter_status(self):
 		"""Test for Newsletter's stats on onload event"""

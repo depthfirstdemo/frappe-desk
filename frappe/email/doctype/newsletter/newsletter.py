@@ -4,6 +4,8 @@
 
 import frappe
 import frappe.utils
+from jinja2.sandbox import SandboxedEnvironment
+
 from frappe import _
 from frappe.email.doctype.email_group.email_group import add_subscribers
 from frappe.rate_limiter import rate_limit
@@ -242,7 +244,8 @@ class Newsletter(WebsiteGenerator):
 		if self.content_type == "HTML":
 			message = self.message_html
 
-		html = frappe.render_template(message, {"doc": self.as_dict()})
+		# Newsletter content is user-authored; do not expose Frappe's Jinja globals.
+		html = SandboxedEnvironment().from_string(message or "").render({"doc": self.as_dict()})
 
 		return self.add_source(html, medium=medium)
 
