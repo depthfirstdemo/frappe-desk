@@ -81,6 +81,9 @@
     "vuex": "4.0.2",
     "yargs": "^17.5.1"
   },
+  "resolutions": {
+    "qs": "6.16.0"
+  },
   "nyc": {
     "report-dir": ".cypress-coverage"
   },
