@@ -19,6 +19,9 @@
     "node": ">=18"
   },
   "homepage": "https://frappeframework.com",
+  "resolutions": {
+    "pug-code-gen": "3.0.3"
+  },
   "dependencies": {
     "@editorjs/editorjs": "~2.26.3",
     "@frappe/esbuild-plugin-postcss2": "^0.1.3",
