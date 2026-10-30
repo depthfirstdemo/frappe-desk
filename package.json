@@ -84,6 +84,9 @@
   "nyc": {
     "report-dir": ".cypress-coverage"
   },
+  "resolutions": {
+    "micromatch": "4.0.8"
+  },
   "optionalDependencies": {
     "bufferutil": "^4.0.8",
     "utf-8-validate": "^6.0.3"
