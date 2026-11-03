@@ -1,6 +1,12 @@
 // Copyright (c) 2020, Frappe Technologies and contributors
 // For license information, please see license.txt
 
+function append_number_card_filter_row(tbody, values) {
+	const row = $("<tr>");
+	values.forEach((value) => $("<td>").text(value ?? "").appendTo(row));
+	tbody.append(row);
+}
+
 frappe.ui.form.on("Number Card", {
 	refresh: function (frm) {
 		if (!frappe.boot.developer_mode && frm.doc.is_standard) {
@@ -240,13 +246,11 @@ frappe.ui.form.on("Number Card", {
 
 			if (filters.length) {
 				filters.forEach((filter) => {
-					const filter_row = $(`<tr>
-							<td>${filter[1]}</td>
-							<td>${filter[2] || ""}</td>
-							<td>${filter[3]}</td>
-						</tr>`);
-
-					table.find("tbody").append(filter_row);
+					append_number_card_filter_row(table.find("tbody"), [
+						filter[1],
+						filter[2],
+						filter[3],
+					]);
 				});
 				filters_set = true;
 			}
@@ -254,13 +258,11 @@ frappe.ui.form.on("Number Card", {
 			fields = frm.filters.filter((f) => f.fieldname);
 			fields.map((f) => {
 				if (filters[f.fieldname]) {
-					let condition = "=";
-					const filter_row = $(`<tr>
-							<td>${f.label}</td>
-							<td>${condition}</td>
-							<td>${filters[f.fieldname] || ""}</td>
-						</tr>`);
-					table.find("tbody").append(filter_row);
+					append_number_card_filter_row(table.find("tbody"), [
+						f.label,
+						"=",
+						filters[f.fieldname],
+					]);
 					if (!filters_set) filters_set = true;
 				}
 			});
@@ -398,32 +400,19 @@ frappe.ui.form.on("Number Card", {
 				? JSON.parse(frm.doc.dynamic_filters_json)
 				: null;
 
+		const tbody = frm.dynamic_filter_table.find("tbody").empty();
 		if (!frm.dynamic_filters) {
 			const filter_row = $(`<tr><td colspan="3" class="text-muted text-center">
 				${__("Click to Set Dynamic Filters")}</td></tr>`);
-			frm.dynamic_filter_table.find("tbody").html(filter_row);
+			tbody.append(filter_row);
+		} else if ($.isArray(frm.dynamic_filters)) {
+			frm.dynamic_filters.forEach((filter) => {
+				append_number_card_filter_row(tbody, [filter[1], filter[2], filter[3]]);
+			});
 		} else {
-			let filter_rows = "";
-			if ($.isArray(frm.dynamic_filters)) {
-				frm.dynamic_filters.forEach((filter) => {
-					filter_rows += `<tr>
-							<td>${filter[1]}</td>
-							<td>${filter[2] || ""}</td>
-							<td>${filter[3]}</td>
-						</tr>`;
-				});
-			} else {
-				let condition = "=";
-				for (let [key, val] of Object.entries(frm.dynamic_filters)) {
-					filter_rows += `<tr>
-							<td>${key}</td>
-							<td>${condition}</td>
-							<td>${val || ""}</td>
-						</tr>`;
-				}
+			for (let [key, val] of Object.entries(frm.dynamic_filters)) {
+				append_number_card_filter_row(tbody, [key, "=", val]);
 			}
-
-			frm.dynamic_filter_table.find("tbody").html(filter_rows);
 		}
 	},
 
