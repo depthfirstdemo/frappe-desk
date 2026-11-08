@@ -6,6 +6,21 @@ import json
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils.data import escape_html
+
+
+INDICATOR_COLORS = {
+	"Blue",
+	"Cyan",
+	"Gray",
+	"Green",
+	"Light Blue",
+	"Orange",
+	"Pink",
+	"Purple",
+	"Red",
+	"Yellow",
+}
 
 
 class KanbanBoard(Document):
@@ -30,6 +45,7 @@ class KanbanBoard(Document):
 	# end: auto-generated types
 	def validate(self):
 		self.validate_column_name()
+		self.validate_indicator()
 
 	def on_change(self):
 		frappe.clear_cache(doctype=self.reference_doctype)
@@ -43,6 +59,14 @@ class KanbanBoard(Document):
 		for column in self.columns:
 			if not column.column_name:
 				frappe.msgprint(_("Column Name cannot be empty"), raise_exception=True)
+			# Column names are interpolated into Kanban HTML text and quoted attributes.
+			if any(char in column.column_name for char in '<>"'):
+				frappe.throw(_("Column Name cannot contain HTML markup or double quotes"))
+
+	def validate_indicator(self):
+		for column in self.columns:
+			if column.indicator and column.indicator not in INDICATOR_COLORS:
+				frappe.throw(_("Invalid Kanban column indicator"))
 
 
 def get_permission_query_conditions(user):
@@ -81,7 +105,7 @@ def add_column(board_name, column_title):
 	doc = frappe.get_doc("Kanban Board", board_name)
 	for col in doc.columns:
 		if column_title == col.column_name:
-			frappe.throw(_("Column <b>{0}</b> already exist.").format(column_title))
+			frappe.throw(_("Column <b>{0}</b> already exist.").format(escape_html(column_title)))
 
 	doc.append("columns", dict(column_name=column_title))
 	doc.save()
