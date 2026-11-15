@@ -12,6 +12,7 @@ from frappe.query_builder import DocType
 from frappe.test_runner import make_test_records
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import random_string
+from frappe.workflow.doctype.workflow.workflow import get_workflow_state_count
 
 
 class TestWorkflow(FrappeTestCase):
@@ -39,6 +40,51 @@ class TestWorkflow(FrappeTestCase):
 		self.assertEqual(todo.workflow_state, "Pending")
 
 		return todo
+
+	def test_state_count_respects_row_permissions(self):
+		user = "test2@example.com"
+		visible = frappe.get_doc(
+			{"doctype": "ToDo", "description": "Visible task", "allocated_to": user}
+		).insert()
+		hidden = frappe.get_doc(
+			{"doctype": "ToDo", "description": "Hidden task", "allocated_to": "Administrator"}
+		).insert()
+		visible_state = f"Visible {random_string(10)}"
+		hidden_state = f"Hidden {random_string(10)}"
+		frappe.db.set_value("ToDo", visible.name, "workflow_state", visible_state)
+		frappe.db.set_value("ToDo", hidden.name, "workflow_state", hidden_state)
+
+		test_user = frappe.get_doc("User", user)
+		has_system_manager_role = "System Manager" in frappe.get_roles(user)
+		if has_system_manager_role:
+			test_user.remove_roles("System Manager")
+		try:
+			frappe.set_user(user)
+			self.assertTrue(frappe.has_permission("ToDo", "read"))
+			counts = {
+				row.workflow_state: row.count for row in get_workflow_state_count("ToDo", "workflow_state", [])
+			}
+			self.assertEqual(counts.get(visible_state), 1)
+			self.assertNotIn(hidden_state, counts)
+		finally:
+			frappe.set_user("Administrator")
+			if has_system_manager_role:
+				test_user.add_roles("System Manager")
+
+	def test_state_count_rejects_restricted_field(self):
+		from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+		setter = make_property_setter("ToDo", "description", "permlevel", 1, "Int")
+		try:
+			frappe.clear_cache(doctype="ToDo")
+			frappe.set_user("test2@example.com")
+			self.assertTrue(frappe.has_permission("ToDo", "read"))
+			with self.assertRaises(frappe.PermissionError):
+				get_workflow_state_count("ToDo", "description", [])
+		finally:
+			frappe.set_user("Administrator")
+			frappe.delete_doc(setter.doctype, setter.name)
+			frappe.clear_cache(doctype="ToDo")
 
 	def test_approve(self, doc=None):
 		"""test simple workflow"""
