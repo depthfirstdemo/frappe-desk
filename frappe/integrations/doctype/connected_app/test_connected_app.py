@@ -1,10 +1,12 @@
 # Copyright (c) 2019, Frappe Technologies and contributors
 # License: MIT. See LICENSE
+from unittest.mock import patch
 from urllib.parse import urljoin
 
 import requests
 
 import frappe
+from frappe.integrations.utils import _PinnedHostnameAdapter, make_safe_get_request
 from frappe.integrations.doctype.social_login_key.test_social_login_key import (
 	create_or_update_social_login_key,
 )
@@ -46,6 +48,59 @@ def get_oauth_client():
 	oauth_client.insert()
 
 	return oauth_client
+
+
+class TestSafeOpenIDConfiguration(FrappeTestCase):
+	def test_private_addresses_and_invalid_schemes(self):
+		for url in (
+			"http://169.254.169.254/latest/meta-data/",
+			"http://127.0.0.1/",
+			"http://[::1]/",
+			"file:///etc/passwd",
+			"http://user@8.8.8.8/",
+		):
+			with self.subTest(url=url), self.assertRaises(frappe.ValidationError):
+				make_safe_get_request(url)
+
+	@patch("frappe.integrations.utils.requests.Session")
+	@patch("frappe.integrations.utils.socket.getaddrinfo")
+	def test_mixed_dns_results_are_rejected(self, resolve, session):
+		resolve.return_value = [
+			(None, None, None, None, ("8.8.8.8", 443)),
+			(None, None, None, None, ("10.0.0.1", 443)),
+		]
+		with self.assertRaises(frappe.ValidationError):
+			make_safe_get_request("https://example.com/.well-known/openid-configuration")
+		session.assert_not_called()
+
+	@patch("frappe.integrations.utils.requests.Session")
+	@patch("frappe.integrations.utils.socket.getaddrinfo")
+	def test_public_url_is_pinned_and_redirects_are_rejected(self, resolve, session_factory):
+		resolve.return_value = [(None, None, None, None, ("8.8.8.8", 443))]
+		session = session_factory.return_value
+		session.__enter__.return_value = session
+		response = session.get.return_value
+		response.status_code = 200
+		response.headers = {"content-type": "application/json"}
+		response.json.return_value = {"issuer": "https://example.com"}
+		url = "https://example.com/.well-known/openid-configuration"
+
+		self.assertEqual(make_safe_get_request(url), {"issuer": "https://example.com"})
+		session.get.assert_called_once_with(
+			"https://8.8.8.8/.well-known/openid-configuration",
+			headers={"Host": "example.com"},
+			allow_redirects=False,
+			timeout=10,
+		)
+		self.assertFalse(session.trust_env)
+		adapter = session.mount.call_args.args[1]
+		self.assertIsInstance(adapter, _PinnedHostnameAdapter)
+		self.assertEqual(adapter.poolmanager.connection_pool_kw["assert_hostname"], "example.com")
+		self.assertEqual(adapter.poolmanager.connection_pool_kw["server_hostname"], "example.com")
+
+		response.status_code = 302
+		with self.assertRaises(frappe.ValidationError):
+			make_safe_get_request(url)
 
 
 class TestConnectedApp(FrappeTestCase):
