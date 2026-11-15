@@ -123,11 +123,21 @@ def get_workflow_state_count(doctype, workflow_state_field, states):
 	frappe.has_permission(doctype=doctype, ptype="read", throw=True)
 	states = frappe.parse_json(states)
 
-	if workflow_state_field in frappe.get_meta(doctype).get_valid_columns():
-		result = frappe.get_all(
+	meta = frappe.get_meta(doctype)
+	if workflow_state_field in meta.get_valid_columns():
+		if (
+			meta.get_field(workflow_state_field)
+			and workflow_state_field not in meta.get_permitted_fieldnames()
+		):
+			frappe.throw(
+				_("Not permitted to read field {0}").format(workflow_state_field), frappe.PermissionError
+			)
+
+		result = frappe.get_list(
 			doctype,
 			fields=[workflow_state_field, "count(*) as count"],
 			filters={workflow_state_field: ["not in", states]},
 			group_by=workflow_state_field,
+			limit_page_length=0,
 		)
 		return [r for r in result if r[workflow_state_field]]
