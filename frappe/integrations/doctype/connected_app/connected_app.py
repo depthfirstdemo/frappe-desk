@@ -9,7 +9,7 @@ from requests_oauthlib import OAuth2Session
 
 import frappe
 from frappe import _
-from frappe.integrations.utils import make_get_request
+from frappe.integrations.utils import make_safe_get_request
 from frappe.model.document import Document
 
 if any((os.getenv("CI"), frappe.conf.developer_mode, frappe.conf.allow_tests)):
@@ -51,7 +51,7 @@ class ConnectedApp(Document):
 	def get_openid_configuration(self):
 		if not self.openid_configuration:
 			frappe.throw(_("Please enter OpenID Configuration URL"))
-		return make_get_request(self.openid_configuration)
+		return make_safe_get_request(self.openid_configuration)
 
 	def validate(self):
 		base_url = frappe.utils.get_url()
