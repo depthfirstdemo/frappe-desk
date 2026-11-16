@@ -8,6 +8,7 @@ from frappe.desk.doctype.notification_settings.notification_settings import (
 	is_notifications_enabled,
 )
 from frappe.model.document import Document
+from frappe.utils.data import escape_html
 
 
 class NotificationLog(Document):
@@ -67,7 +68,7 @@ def get_title(doctype, docname, title_field=None):
 
 
 def get_title_html(title):
-	return f'<b class="subject-title">{title}</b>'
+	return f'<b class="subject-title">{escape_html(title)}</b>'
 
 
 def enqueue_create_notification(users: list[str] | str, doc: dict):
