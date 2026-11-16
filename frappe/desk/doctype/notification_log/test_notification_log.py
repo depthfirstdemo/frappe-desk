@@ -2,11 +2,19 @@
 # License: MIT. See LICENSE
 import frappe
 from frappe.core.doctype.user.user import get_system_users
+from frappe.desk.doctype.notification_log.notification_log import get_title_html
 from frappe.desk.form.assign_to import add as assign_task
 from frappe.tests.utils import FrappeTestCase
 
 
 class TestNotificationLog(FrappeTestCase):
+	def test_title_html_escapes_document_title(self):
+		title = '</b><img src=x onerror=alert(document.domain)>'
+		self.assertEqual(
+			get_title_html(title),
+			'<b class="subject-title">&lt;/b&gt;&lt;img src=x onerror=alert(document.domain)&gt;</b>',
+		)
+
 	def test_assignment(self):
 		todo = get_todo()
 		user = get_user()
