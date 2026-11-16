@@ -672,6 +672,9 @@ def update_onboarding_step(name, field, value):
 	"""
 	from frappe.utils.telemetry import capture
 
+	if field not in ("is_complete", "is_skipped"):
+		frappe.throw(_("Invalid onboarding field"), ValidationError)
+
 	frappe.db.set_value("Onboarding Step", name, field, value)
 
 	capture(frappe.scrub(name), app="frappe_onboarding", properties={field: value})
