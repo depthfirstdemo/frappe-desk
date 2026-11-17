@@ -24,7 +24,7 @@ frappe.ui.form.on("Newsletter", {
 						if (links && links.length) {
 							let html =
 								"<ul>" +
-								links.map((link) => `<li>${link}</li>`).join("") +
+								links.map((link) => `<li>${frappe.utils.escape_html(link)}</li>`).join("") +
 								"</ul>";
 							frm.dashboard.set_headline(
 								__("Following links are broken in the email content: {0}", [html])
